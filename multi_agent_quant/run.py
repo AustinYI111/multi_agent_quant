@@ -1,6 +1,6 @@
 """
 multi_agent_quant/run.py — 项目主入口
-正确调用 DataAgent, TrendAgent, MeanReversionAgent, MLAgent, CoordinatorAgent, BacktestEngine
+正确调用 DataAgent, TrendAgent, MeanReversionAgent, MomentumAgent, MLAgent, CoordinatorAgent, BacktestEngine
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import pandas as pd
 from agents.data_agent import DataAgent
 from agents.trend_agent import TrendAgent
 from agents.mean_reversion_agent import MeanReversionAgent
+from agents.momentum_agent import MomentumAgent
 from agents.ml_agent import MLAgent
 from agents.coordinator_agent import CoordinatorAgent
 from backtest.backtest_engine import BacktestEngine
@@ -67,13 +68,44 @@ def main():
     print(f"[DataAgent] 数据行数: {len(df)}，日期范围: {df.index.min()} ~ {df.index.max()}")
 
     # 2. 策略 Agents
-    trend_agent = TrendAgent(short_window=5, long_window=20)
-    mr_agent = MeanReversionAgent(window=20, num_std=1.2, conf_scale=1.0)
-    ml_agent = MLAgent(lookback=10, min_train_size=60, prob_threshold=0.55)
+    trend_agent = TrendAgent(
+        short_window=5,
+        long_window=20,
+        adx_threshold=20.0,
+        min_conf_when_signal=0.15,
+    )
+    mr_agent = MeanReversionAgent(
+        window=20,
+        num_std=2.0,
+        rsi_oversold=30.0,
+        rsi_overbought=70.0,
+        ma_deviation_threshold=0.015,
+        min_confidence=0.15,
+    )
+    momentum_agent = MomentumAgent(
+        short_momentum=5,
+        mid_momentum=20,
+        breakout_window=10,
+        min_confidence=0.15,
+    )
+    ml_agent = MLAgent(
+        lookback=10,
+        min_train_size=60,
+        prob_threshold=0.55,
+        auxiliary_mode=True,   # 辅助模式：用于 Coordinator 融合
+    )
+    ml_agent_indep = MLAgent(
+        lookback=10,
+        min_train_size=60,
+        prob_threshold=0.55,
+        auxiliary_mode=False,  # 独立模式：允许独立发出 buy/sell
+        buy_threshold=0.60,
+        sell_threshold=0.40,
+    )
 
-    # 3. 协调 Agent（ml 是辅助 agent，不需要在 agent_weights 里）
+    # 3. 协调 Agent（含动量 Agent，ml 是辅助 agent 不在 agent_weights 里）
     coordinator = CoordinatorAgent(
-        agent_weights={"trend": 0.60, "mean_reversion": 0.40},
+        agent_weights={"trend": 0.35, "mean_reversion": 0.30, "momentum": 0.35},
         ml_veto_enabled=True,
         min_edge=0.01,
         min_score_to_trade=0.01,
@@ -81,14 +113,15 @@ def main():
         min_conf_when_trade=0.05,
     )
 
-    # 4. 回测引擎
+    # 4. 回测引擎（降低门槛，从 1000 到 500）
     engine = BacktestEngine(
         init_cash=args.init_cash,
         fee_rate=0.0003,
-        slippage_bps=5.0,
-        max_position_pct=0.98,
-        min_order_value=1000.0,
+        slippage_bps=3.0,          # 降低滑点
+        max_position_pct=0.95,
+        min_order_value=500.0,     # 从 1000 降到 500
         lot_size=100,
+        allow_fractional=False,
     )
 
     # 5. 单 Agent 回测
@@ -98,35 +131,49 @@ def main():
     print("[回测] MeanRev-only ...")
     m2, t2 = engine.run_single_agent(df, mr_agent, "MeanRev-only", verbose=args.verbose)
 
-    print("[回测] ML-only ...")
-    m3, t3 = engine.run_single_agent(df, ml_agent, "ML-only", verbose=args.verbose)
+    print("[回测] Momentum-only ...")
+    m_momentum, t_momentum = engine.run_single_agent(df, momentum_agent, "Momentum-only", verbose=args.verbose)
 
-    # 6. 融合策略回测（Trend + MeanRev）
-    print("[回测] Fusion(Trend+MeanRev) ...")
-    fusion_agents = {"trend": trend_agent, "mean_reversion": mr_agent}
+    print("[回测] ML-only (辅助模式，signal=hold) ...")
+    m3, t3 = engine.run_single_agent(df, ml_agent, "ML-only(aux)", verbose=args.verbose)
+
+    print("[回测] ML-only (独立模式) ...")
+    m3b, t3b = engine.run_single_agent(df, ml_agent_indep, "ML-only(indep)", verbose=args.verbose)
+
+    # 6. 融合策略回测（Trend + MeanRev + Momentum，不含 ML veto）
+    print("[回测] Fusion(Trend+MeanRev+Momentum) ...")
+    fusion_agents = {"trend": trend_agent, "mean_reversion": mr_agent, "momentum": momentum_agent}
     coordinator_no_ml = CoordinatorAgent(
-        agent_weights={"trend": 0.60, "mean_reversion": 0.40},
+        agent_weights={"trend": 0.35, "mean_reversion": 0.30, "momentum": 0.35},
         ml_veto_enabled=False,
     )
     m4, t4 = engine.run_fusion(
-        df, fusion_agents, coordinator_no_ml, "Fusion(Trend+MeanRev)", verbose=args.verbose
+        df, fusion_agents, coordinator_no_ml, "Fusion(Trend+MeanRev+Momentum)", verbose=args.verbose
     )
 
-    # 7. 融合策略回测（Trend + MeanRev + ML veto）
-    print("[回测] Fusion(Trend+MeanRev+ML) ...")
-    fusion_agents_ml = {"trend": trend_agent, "mean_reversion": mr_agent, "ml": ml_agent}
+    # 7. 融合策略回测（Trend + MeanRev + Momentum + ML veto）
+    print("[回测] Fusion(Trend+MeanRev+Momentum+ML) ...")
+    fusion_agents_ml = {
+        "trend": trend_agent,
+        "mean_reversion": mr_agent,
+        "momentum": momentum_agent,
+        "ml": ml_agent,
+    }
     m5, t5 = engine.run_fusion(
-        df, fusion_agents_ml, coordinator, "Fusion(Trend+MeanRev+ML)", verbose=args.verbose
+        df, fusion_agents_ml, coordinator, "Fusion(Trend+MeanRev+Momentum+ML)", verbose=args.verbose
     )
 
     # 8. 打印结果对比
     _print_summary("Trend-only", m1, t1)
     _print_summary("MeanRev-only", m2, t2)
-    _print_summary("ML-only", m3, t3)
-    _print_summary("Fusion(Trend+MeanRev)", m4, t4)
-    _print_summary("Fusion(Trend+MeanRev+ML)", m5, t5)
+    _print_summary("Momentum-only", m_momentum, t_momentum)
+    _print_summary("ML-only(aux)", m3, t3)
+    _print_summary("ML-only(indep)", m3b, t3b)
+    _print_summary("Fusion(Trend+MeanRev+Momentum)", m4, t4)
+    _print_summary("Fusion(Trend+MeanRev+Momentum+ML)", m5, t5)
 
-    table = pd.DataFrame([_to_row(m) for m in [m1, m2, m3, m4, m5]])
+    all_metrics = [m1, m2, m_momentum, m3, m3b, m4, m5]
+    table = pd.DataFrame([_to_row(m) for m in all_metrics])
     print("\n=== 策略对比汇总 ===")
     print(table.to_string(index=False))
 
@@ -137,4 +184,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
