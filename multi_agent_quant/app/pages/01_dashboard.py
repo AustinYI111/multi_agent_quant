@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 import pandas as pd
 
-from multi_agent_quant.app.utils.data_loader import load_comparison_table, load_equity_curves
-from multi_agent_quant.app.utils.plot_utils import plot_equity_curves, plot_metrics_bar
+from app.utils.data_loader import load_comparison_table, load_equity_curves
+from app.utils.plot_utils import plot_equity_curves, plot_metrics_bar
 
 st.set_page_config(page_title="仪表板", page_icon="📊", layout="wide")
 st.title("📊 仪表板")
