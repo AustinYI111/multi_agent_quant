@@ -13,13 +13,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pandas as pd
 import streamlit as st
 
-from multi_agent_quant.app.utils.data_loader import (
+from app.utils.data_loader import (
     load_factor_ic_scores,
     load_factor_ic_decay,
     load_factor_summary,
     get_available_symbols,
 )
-from multi_agent_quant.app.utils.plot_utils import (
+from app.utils.plot_utils import (
     plot_ic_bar,
     plot_ic_decay,
 )

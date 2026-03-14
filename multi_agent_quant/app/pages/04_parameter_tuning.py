@@ -14,14 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pandas as pd
 import streamlit as st
 
-from multi_agent_quant.agents.data_agent import DataAgent
-from multi_agent_quant.agents.trend_agent import TrendAgent
-from multi_agent_quant.agents.mean_reversion_agent import MeanReversionAgent
-from multi_agent_quant.agents.ml_agent import MLAgent
-from multi_agent_quant.agents.coordinator_agent import CoordinatorAgent
-from multi_agent_quant.backtest.backtest_engine import BacktestEngine
-from multi_agent_quant.utils.metrics import compute_all_metrics
-from multi_agent_quant.app.utils.plot_utils import plot_equity_curves, plot_drawdown
+from agents.data_agent import DataAgent
+from agents.trend_agent import TrendAgent
+from agents.mean_reversion_agent import MeanReversionAgent
+from agents.ml_agent import MLAgent
+from agents.coordinator_agent import CoordinatorAgent
+from backtest.backtest_engine import BacktestEngine
+from utils.metrics import compute_all_metrics
+from app.utils.plot_utils import plot_equity_curves, plot_drawdown
 
 st.set_page_config(page_title="参数调优", page_icon="⚙️", layout="wide")
 st.title("⚙️ 参数调优")

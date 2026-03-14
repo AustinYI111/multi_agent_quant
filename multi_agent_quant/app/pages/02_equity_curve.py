@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pandas as pd
 import streamlit as st
 
-from multi_agent_quant.app.utils.data_loader import load_equity_curves
-from multi_agent_quant.app.utils.plot_utils import plot_equity_curves, plot_drawdown
+from app.utils.data_loader import load_equity_curves
+from app.utils.plot_utils import plot_equity_curves, plot_drawdown
 
 st.set_page_config(page_title="资金曲线", page_icon="📈", layout="wide")
 st.title("📈 资金曲线")

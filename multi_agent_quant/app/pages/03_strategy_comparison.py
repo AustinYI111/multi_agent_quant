@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 import pandas as pd
 
-from multi_agent_quant.app.utils.data_loader import load_comparison_table
-from multi_agent_quant.app.utils.plot_utils import plot_metrics_bar, plot_metrics_radar
+from app.utils.data_loader import load_comparison_table
+from app.utils.plot_utils import plot_metrics_bar, plot_metrics_radar
 
 st.set_page_config(page_title="策略对比", page_icon="🔄", layout="wide")
 st.title("🔄 策略对比")
